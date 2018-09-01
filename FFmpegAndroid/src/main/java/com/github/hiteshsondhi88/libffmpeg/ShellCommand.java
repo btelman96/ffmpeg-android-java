@@ -3,7 +3,6 @@ package com.github.hiteshsondhi88.libffmpeg;
 import java.io.IOException;
 
 class ShellCommand {
-
     Process run(String[] commandString) {
         Process process = null;
         try {

@@ -13,11 +13,13 @@ class FFmpegExecuteAsyncTask extends AsyncTask<Void, String, CommandResult> {
     private final FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler;
     private final ShellCommand shellCommand;
     private final long timeout;
+    private final String uuid;
     private long startTime;
     private Process process;
     private String output = "";
 
-    FFmpegExecuteAsyncTask(String[] cmd, long timeout, FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler) {
+    FFmpegExecuteAsyncTask(String UUID, String[] cmd, long timeout, FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler) {
+        this.uuid = UUID;
         this.cmd = cmd;
         this.timeout = timeout;
         this.ffmpegExecuteResponseHandler = ffmpegExecuteResponseHandler;
@@ -39,6 +41,7 @@ class FFmpegExecuteAsyncTask extends AsyncTask<Void, String, CommandResult> {
             if (process == null) {
                 return CommandResult.getDummyFailureResponse();
             }
+            ffmpegExecuteResponseHandler.onProcess(process);
             Log.d("Running publishing updates method");
             checkAndUpdateProcess();
             return CommandResult.getOutputFromProcess(process);
@@ -71,6 +74,17 @@ class FFmpegExecuteAsyncTask extends AsyncTask<Void, String, CommandResult> {
             }
             ffmpegExecuteResponseHandler.onFinish();
         }
+        finished();
+    }
+
+    private void finished() {
+        ProcessPool.remove(uuid);
+    }
+
+    @Override
+    protected void onCancelled(CommandResult commandResult) {
+        super.onCancelled(commandResult);
+        finished();
     }
 
     private void checkAndUpdateProcess() throws TimeoutException, InterruptedException {
@@ -106,4 +120,7 @@ class FFmpegExecuteAsyncTask extends AsyncTask<Void, String, CommandResult> {
         return Util.isProcessCompleted(process);
     }
 
+    public synchronized Process getProcess() {
+        return process;
+    }
 }

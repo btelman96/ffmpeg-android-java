@@ -3,8 +3,14 @@ package com.github.hiteshsondhi88.libffmpeg;
 import android.content.Context;
 import android.text.TextUtils;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegCommandAlreadyRunningException;
 import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedException;
@@ -13,17 +19,18 @@ import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedExceptio
 public class FFmpeg implements FFmpegInterface {
 
     private final Context context;
-    private FFmpegExecuteAsyncTask ffmpegExecuteAsyncTask;
     private FFmpegLoadLibraryAsyncTask ffmpegLoadLibraryAsyncTask;
 
     private static final long MINIMUM_TIMEOUT = 10 * 1000;
     private long timeout = Long.MAX_VALUE;
+    private ExecutorService executorService;
 
     private static FFmpeg instance = null;
 
     private FFmpeg(Context context) {
         this.context = context.getApplicationContext();
         Log.setDEBUG(Util.isDebug(this.context));
+        executorService = Executors.newFixedThreadPool(4);
     }
 
     public static FFmpeg getInstance(Context context) {
@@ -58,18 +65,28 @@ public class FFmpeg implements FFmpegInterface {
     }
 
     @Override
-    public void execute(Map<String, String> environvenmentVars, String[] cmd, FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler) throws FFmpegCommandAlreadyRunningException {
-        if (ffmpegExecuteAsyncTask != null && !ffmpegExecuteAsyncTask.isProcessCompleted()) {
-            throw new FFmpegCommandAlreadyRunningException("FFmpeg command is already running, you are only allowed to run single command at a time");
+    public void execute(String UUID, Map<String, String> environvenmentVars, String[] cmd, FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler) throws FFmpegCommandAlreadyRunningException {
+        if (ProcessPool.isFull()) {
+            throw new FFmpegCommandAlreadyRunningException("FFmpeg command is already running, you are only allowed to run 4 commands at a time");
+        }
+        FFmpegExecuteAsyncTask task = ProcessPool.get(UUID);
+        if (task != null && !task.isProcessCompleted()) {
+            throw new FFmpegCommandAlreadyRunningException("FFmpeg command with this UUID is already running, you are only allowed to run one command at a time with the same UUID");
         }
         if (cmd.length != 0) {
             String[] ffmpegBinary = new String[] { FileUtils.getFFmpeg(context, environvenmentVars) };
             String[] command = concatenate(ffmpegBinary, cmd);
-            ffmpegExecuteAsyncTask = new FFmpegExecuteAsyncTask(command , timeout, ffmpegExecuteResponseHandler);
-            ffmpegExecuteAsyncTask.execute();
+            FFmpegExecuteAsyncTask ffmpegExecuteAsyncTask = new FFmpegExecuteAsyncTask(UUID, command, timeout, ffmpegExecuteResponseHandler);
+            ffmpegExecuteAsyncTask.executeOnExecutor(executorService);
+            ProcessPool.put(UUID, ffmpegExecuteAsyncTask);
         } else {
             throw new IllegalArgumentException("shell command cannot be empty");
         }
+    }
+
+    @Override
+    public void execute(Map<String, String> environvenmentVars, String[] cmd, FFmpegExecuteResponseHandler ffmpegExecuteResponseHandler) throws FFmpegCommandAlreadyRunningException {
+        execute(UUID.randomUUID().toString(), null, cmd, ffmpegExecuteResponseHandler);
     }
 
     public <T> T[] concatenate (T[] a, T[] b) {
@@ -107,12 +124,12 @@ public class FFmpeg implements FFmpegInterface {
 
     @Override
     public boolean isFFmpegCommandRunning() {
-        return ffmpegExecuteAsyncTask != null && !ffmpegExecuteAsyncTask.isProcessCompleted();
+        return ProcessPool.isFull();
     }
 
     @Override
     public boolean killRunningProcesses() {
-        return Util.killAsync(ffmpegLoadLibraryAsyncTask) || Util.killAsync(ffmpegExecuteAsyncTask);
+        return Util.killAsync(ffmpegLoadLibraryAsyncTask) || ProcessPool.killAll();
     }
 
     @Override
