@@ -20,4 +20,5 @@ public interface FFmpegExecuteResponseHandler extends ResponseHandler {
      */
     public void onFailure(String message);
 
+    public void onProcess(Process process);
 }

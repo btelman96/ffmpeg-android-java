@@ -18,6 +18,11 @@ public class ExecuteBinaryResponseHandler implements FFmpegExecuteResponseHandle
     }
 
     @Override
+    public void onProcess(Process process) {
+
+    }
+
+    @Override
     public void onStart() {
 
     }

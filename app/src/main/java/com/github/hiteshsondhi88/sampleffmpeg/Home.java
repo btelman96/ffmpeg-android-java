@@ -5,7 +5,6 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -14,32 +13,22 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import javax.inject.Inject;
-
-import butterknife.ButterKnife;
-import butterknife.InjectView;
-import dagger.ObjectGraph;
-
 import com.github.hiteshsondhi88.libffmpeg.ExecuteBinaryResponseHandler;
 import com.github.hiteshsondhi88.libffmpeg.FFmpeg;
 import com.github.hiteshsondhi88.libffmpeg.LoadBinaryResponseHandler;
 import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegCommandAlreadyRunningException;
 import com.github.hiteshsondhi88.libffmpeg.exceptions.FFmpegNotSupportedException;
 
+import java.io.IOException;
+
 public class Home extends Activity implements View.OnClickListener {
 
     private static final String TAG = Home.class.getSimpleName();
 
-    @Inject
-    FFmpeg ffmpeg;
+    FFmpeg ffmpeg = null;
 
-    @InjectView(R.id.command)
     EditText commandEditText;
-
-    @InjectView(R.id.command_output)
     LinearLayout outputLayout;
-
-    @InjectView(R.id.run_command)
     Button runButton;
 
     private ProgressDialog progressDialog;
@@ -48,8 +37,11 @@ public class Home extends Activity implements View.OnClickListener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
-        ButterKnife.inject(this);
-        ObjectGraph.create(new DaggerDependencyModule(this)).inject(this);
+        ffmpeg = FFmpeg.getInstance(getApplicationContext());
+        runButton = (Button) findViewById(R.id.run_command);
+        outputLayout = (LinearLayout) findViewById(R.id.command_output);
+        commandEditText = (EditText) findViewById(R.id.command);
+        //ObjectGraph.create(new DaggerDependencyModule(this)).inject(this);
 
         loadFFMpegBinary();
         initUI();
@@ -98,7 +90,6 @@ public class Home extends Activity implements View.OnClickListener {
                 @Override
                 public void onStart() {
                     outputLayout.removeAllViews();
-
                     Log.d(TAG, "Started command : ffmpeg " + command);
                     progressDialog.setMessage("Processing...");
                     progressDialog.show();
@@ -108,6 +99,16 @@ public class Home extends Activity implements View.OnClickListener {
                 public void onFinish() {
                     Log.d(TAG, "Finished command : ffmpeg "+command);
                     progressDialog.dismiss();
+                }
+
+                @Override
+                public void onProcess(Process process) {
+                    super.onProcess(process);
+                    try {
+                        process.getOutputStream().write(0x00);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             });
         } catch (FFmpegCommandAlreadyRunningException e) {
@@ -145,6 +146,10 @@ public class Home extends Activity implements View.OnClickListener {
                 String cmd = commandEditText.getText().toString();
                 String[] command = cmd.split(" ");
                 if (command.length != 0) {
+                    execFFmpegBinary(command);
+                    execFFmpegBinary(command);
+                    execFFmpegBinary(command);
+                    execFFmpegBinary(command);
                     execFFmpegBinary(command);
                 } else {
                     Toast.makeText(Home.this, getString(R.string.empty_command_toast), Toast.LENGTH_LONG).show();
